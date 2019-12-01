@@ -19,4 +19,4 @@ jobs:
         pip install -r requirements.txt
     - name: Run app
       run: |
-        python scrape_app.py
+        python scrape_all.py

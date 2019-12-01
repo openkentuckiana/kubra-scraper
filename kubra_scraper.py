@@ -79,7 +79,7 @@ class KubraScraper(DeltaScraper):
 
     def display_record(self, outage):
         display = []
-        display.append(f"  {outage['number_out']} customers out with status {outage['crew_status']}")
+        display.append(f"  {outage['cust_affected']} outage(s) added with {outage['cust_affected']} customers affected")
         return "\n".join(display)
 
     @staticmethod

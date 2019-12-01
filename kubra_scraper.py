@@ -78,8 +78,7 @@ class KubraScraper(DeltaScraper):
         return outages
 
     def display_record(self, outage):
-        display = []
-        display.append(f"  {outage['cust_affected']} outage(s) added with {outage['cust_affected']} customers affected")
+        display = [f"  {outage['cust_affected']} outage(s) added with {outage['cust_affected']} customers affected"]
         return "\n".join(display)
 
     @staticmethod
@@ -88,7 +87,8 @@ class KubraScraper(DeltaScraper):
         loc = polyline.decode(raw_outage["geom"]["p"][0])
 
         return {
-            "id": desc["inc_id"],
+            "id": f"{raw_outage['id']}_{desc['start_time']}",
+            "inc_id": desc["inc_id"],
             "cluster": desc["cluster"],
             "etr": desc["etr"],
             "etr_confidence": desc["etr_confidence"],

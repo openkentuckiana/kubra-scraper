@@ -1,7 +1,7 @@
 from kubra_scraper import KubraScraper
 
 
-class LGEKUScaper(KubraScraper):
+class LGEKUScraper(KubraScraper):
     owner = "codeforkyana"
     repo = "power-outage-data"
     filepath = "lgeku/outages.json"

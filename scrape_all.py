@@ -40,7 +40,6 @@ if __name__ == "__main__":
         try:
             scraper.scrape_and_store()
         except Exception as e:
-            breakpoint()
             print(scraper.filepath, file=sys.stderr)
             print(e, file=sys.stderr)
             print("\n", file=sys.stderr)

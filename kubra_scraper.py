@@ -11,7 +11,6 @@ load_dotenv()
 class KubraScraper(DeltaScraper):
     base_url = "https://kubra.io/"
     service_areas_url_template = base_url + "{regions}/{regions_key}/serviceareas.json"
-    data_url_template = base_url + "{data_path}/public/summary-1/data.json"
     quadkey_url_template = base_url + "{data_path}/public/cluster-3/{quadkey}.json"
 
     record_key = "id"
@@ -52,28 +51,24 @@ class KubraScraper(DeltaScraper):
         return [mercantile.quadkey(t) for t in mercantile.tiles(*bbox, zooms=[6])]
 
     def fetch_data(self):
-
-        data = requests.get(self.data_url_template.format(data_path=self.data_path)).json()
-        total_outages = data["summaryFileData"]["totals"][0]["total_outages"]
-
         outages = []
 
         quadkeys = self._get_quadkeys()
 
-        number_out = 0
         for q in quadkeys:
             res = requests.get(self.quadkey_url_template.format(data_path=self.data_path, quadkey=q),)
 
+            # If there are no outages in the area, there won't be a file.
             if not res.ok:
                 continue
 
             for o in res.json()["file_data"]:
-                outage_info = self._get_outage_info(o)
-                outages.append(outage_info)
-                number_out += outage_info["number_out"]
+                # This field appears to flap for a given outage as outage properties change.
+                # I think it's better to only log when there's an incident ID.
+                if not o.get("desc", {}).get("inc_id"):
+                    continue
 
-        if number_out != total_outages:
-            raise Exception(f"Total outages ({total_outages}) don't match number found ({number_out})")
+                outages.append(self._get_outage_info(o))
 
         return outages
 
@@ -87,8 +82,7 @@ class KubraScraper(DeltaScraper):
         loc = polyline.decode(raw_outage["geom"]["p"][0])
 
         return {
-            "id": f"{raw_outage['id']}_{desc['start_time']}",
-            "inc_id": desc["inc_id"],
+            "id": desc["inc_id"],
             "cluster": desc["cluster"],
             "etr": desc["etr"],
             "etr_confidence": desc["etr_confidence"],

@@ -7,6 +7,8 @@ from base_scraper import DeltaScraper
 
 load_dotenv()
 
+MIN_ZOOM = 6
+
 
 class KubraScraper(DeltaScraper):
     base_url = "https://kubra.io/"
@@ -36,7 +38,8 @@ class KubraScraper(DeltaScraper):
         x_coordinates, y_coordinates = zip(*points)
         return [min(y_coordinates), min(x_coordinates), max(y_coordinates), max(x_coordinates)]
 
-    def _get_quadkeys(self):
+    def _get_service_area_quadkeys(self):
+        """Get the quadkeys for the entire service area"""
         res = requests.get(self.service_areas_url).json()
         areas = res.get("file_data")[0].get("geom").get("a")
 
@@ -48,12 +51,18 @@ class KubraScraper(DeltaScraper):
 
         bbox = self._get_bounding_box(points)
 
-        return [mercantile.quadkey(t) for t in mercantile.tiles(*bbox, zooms=[6])]
+        return [mercantile.quadkey(t) for t in mercantile.tiles(*bbox, zooms=[MIN_ZOOM])]
+
+    def _get_quadkey_for_point(self, point, zoom):
+        ll = polyline.decode(point)[0]
+        return [mercantile.tile(lng=ll[0], lat=ll[1], zoom=zoom)]
 
     def fetch_data(self):
-        outages = []
+        quadkeys = self._get_service_area_quadkeys()
+        return self._fetch_data(quadkeys)
 
-        quadkeys = self._get_quadkeys()
+    def _fetch_data(self, quadkeys, zoom=MIN_ZOOM):
+        outages = []
 
         for q in quadkeys:
             res = requests.get(self.quadkey_url_template.format(data_path=self.data_path, quadkey=q),)
@@ -63,12 +72,11 @@ class KubraScraper(DeltaScraper):
                 continue
 
             for o in res.json()["file_data"]:
-                # This field appears to flap for a given outage as outage properties change.
-                # I think it's better to only log when there's an incident ID.
-                if not o.get("desc", {}).get("inc_id"):
-                    continue
-
-                outages.append(self._get_outage_info(o))
+                if o["desc"]["cluster"]:
+                    # We need to zoom in on clusters
+                    outages.extend(self._fetch_data(self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)))
+                else:
+                    outages.append(self._get_outage_info(o))
 
         return outages
 

@@ -73,7 +73,7 @@ class KubraScraper(DeltaScraper):
 
             for o in res.json()["file_data"]:
                 if o["desc"]["cluster"]:
-                    # We need to zoom in on clusters
+                    # We need to zoom in on clusters to get individual events.
                     outages.extend(self._fetch_data(self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)))
                 else:
                     outages.append(self._get_outage_info(o))

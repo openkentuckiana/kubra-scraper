@@ -91,15 +91,14 @@ class KubraScraper(DeltaScraper):
 
         return {
             "id": desc["inc_id"],
-            "cluster": desc["cluster"],
             "etr": desc["etr"],
-            "etr_confidence": desc["etr_confidence"],
+            "etrConfidence": desc["etr_confidence"],
             "comments": desc["comments"],
             "cause": desc["cause"]["EN-US"] if desc["cause"] else None,
-            "number_out": desc["n_out"],
-            "cust_affected": desc["cust_a"]["val"],
-            "crew_status": desc["crew_status"],
-            "start_time": desc["start_time"],
-            "lat": loc[0][0],
-            "lng": loc[0][1],
+            "numberOut": desc["n_out"],
+            "custEffected": desc["cust_a"]["val"],
+            "crewStatus": desc["crew_status"],
+            "startTime": desc["start_time"],
+            "latitude": loc[0][0],
+            "longitude": loc[0][1],
         }

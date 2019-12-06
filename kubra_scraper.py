@@ -55,7 +55,7 @@ class KubraScraper(DeltaScraper):
 
     def _get_quadkey_for_point(self, point, zoom):
         ll = polyline.decode(point)[0]
-        return [mercantile.tile(lng=ll[0], lat=ll[1], zoom=zoom)]
+        return [mercantile.quadkey(mercantile.tile(lng=ll[0], lat=ll[1], zoom=zoom))]
 
     def fetch_data(self):
         quadkeys = self._get_service_area_quadkeys()

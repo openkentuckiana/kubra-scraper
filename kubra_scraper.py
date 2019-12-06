@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import mercantile
 import polyline
 import requests
@@ -55,17 +57,17 @@ class KubraScraper(DeltaScraper):
 
     def _get_quadkey_for_point(self, point, zoom):
         ll = polyline.decode(point)[0]
-        return [mercantile.quadkey(mercantile.tile(lng=ll[0], lat=ll[1], zoom=zoom))]
+        return [mercantile.quadkey(mercantile.tile(lng=ll[1], lat=ll[0], zoom=zoom))]
 
     def fetch_data(self):
         quadkeys = self._get_service_area_quadkeys()
-        return self._fetch_data(quadkeys)
+        return list(self._fetch_data(quadkeys).values())
 
     def _fetch_data(self, quadkeys, zoom=MIN_ZOOM):
-        outages = []
+        outages = {}
 
         for q in quadkeys:
-            res = requests.get(self.quadkey_url_template.format(data_path=self.data_path, quadkey=q),)
+            res = requests.get(self.quadkey_url_template.format(data_path=self.data_path, quadkey=q))
 
             # If there are no outages in the area, there won't be a file.
             if not res.ok:
@@ -74,9 +76,10 @@ class KubraScraper(DeltaScraper):
             for o in res.json()["file_data"]:
                 if o["desc"]["cluster"]:
                     # We need to zoom in on clusters to get individual events.
-                    outages.extend(self._fetch_data(self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)))
+                    outages.update(self._fetch_data(self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1), zoom + 1))
                 else:
-                    outages.append(self._get_outage_info(o))
+                    outage_info = self._get_outage_info(o)
+                    outages[outage_info["id"]] = outage_info
 
         return outages
 

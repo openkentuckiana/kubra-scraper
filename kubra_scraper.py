@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 import mercantile
 import polyline
 import requests
@@ -14,6 +12,7 @@ MIN_ZOOM = 6
 
 class KubraScraper(DeltaScraper):
     base_url = "https://kubra.io/"
+    data_url_template = base_url + "{data_path}/public/summary-1/data.json"
     service_areas_url_template = base_url + "{regions}/{regions_key}/serviceareas.json"
     quadkey_url_template = base_url + "{data_path}/public/cluster-3/{quadkey}.json"
 
@@ -40,6 +39,16 @@ class KubraScraper(DeltaScraper):
         x_coordinates, y_coordinates = zip(*points)
         return [min(y_coordinates), min(x_coordinates), max(y_coordinates), max(x_coordinates)]
 
+    @staticmethod
+    def _get_neighboring_quadkeys(quadkey):
+        tile = mercantile.quadkey_to_tile(quadkey)
+        return [
+            mercantile.quadkey(mercantile.Tile(x=tile.x, y=tile.y - 1, z=tile.z)),  # N
+            mercantile.quadkey(mercantile.Tile(x=tile.x + 1, y=tile.y, z=tile.z)),  # E
+            mercantile.quadkey(mercantile.Tile(x=tile.x, y=tile.y + 1, z=tile.z)),  # S
+            mercantile.quadkey(mercantile.Tile(x=tile.x - 1, y=tile.y, z=tile.z)),  # W
+        ]
+
     def _get_service_area_quadkeys(self):
         """Get the quadkeys for the entire service area"""
         res = requests.get(self.service_areas_url).json()
@@ -57,13 +66,23 @@ class KubraScraper(DeltaScraper):
 
     def _get_quadkey_for_point(self, point, zoom):
         ll = polyline.decode(point)[0]
-        return [mercantile.quadkey(mercantile.tile(lng=ll[1], lat=ll[0], zoom=zoom))]
+        return mercantile.quadkey(mercantile.tile(lng=ll[1], lat=ll[0], zoom=zoom))
 
     def fetch_data(self):
-        quadkeys = self._get_service_area_quadkeys()
-        return list(self._fetch_data(quadkeys).values())
+        data = requests.get(self.data_url_template.format(data_path=self.data_path)).json()
+        expected_outages = data["summaryFileData"]["totals"][0]["total_outages"]
 
-    def _fetch_data(self, quadkeys, zoom=MIN_ZOOM):
+        quadkeys = self._get_service_area_quadkeys()
+
+        outages = self._fetch_data(quadkeys).values()
+        number_out = sum([o["numberOut"] for o in outages])
+
+        if number_out != expected_outages:
+            raise Exception(f"Outages found ({number_out}) does not match expected outages ({expected_outages})")
+
+        return list(outages)
+
+    def _fetch_data(self, quadkeys, zoom=MIN_ZOOM, cluster_search=False):
         outages = {}
 
         for q in quadkeys:
@@ -75,9 +94,14 @@ class KubraScraper(DeltaScraper):
 
             for o in res.json()["file_data"]:
                 if o["desc"]["cluster"]:
-                    # We need to zoom in on clusters to get individual events.
-                    outages.update(self._fetch_data(self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1), zoom + 1))
+                    # If it's a cluster, we need to drill down (zoom in)
+                    outages.update(self._fetch_data([self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)], zoom + 1, True))
                 else:
+                    # If we were drilling down, once we get to the outage, we need to look at neighboring quadkeys in case
+                    # any outages that were in the cluster spanned a quadkey boundary.
+                    if cluster_search:
+                        outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), zoom))
+
                     outage_info = self._get_outage_info(o)
                     outages[outage_info["id"]] = outage_info
 

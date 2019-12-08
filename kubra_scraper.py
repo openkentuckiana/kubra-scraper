@@ -19,6 +19,9 @@ class KubraScraper(DeltaScraper):
     record_key = "id"
     noun = "outage"
 
+    total_downloaded = 0
+    total_requests = 0
+
     @property
     def state_url(self):
         return (
@@ -28,7 +31,7 @@ class KubraScraper(DeltaScraper):
 
     def __init__(self, github_token):
         super().__init__(github_token)
-        state = requests.get(self.state_url).json()
+        state = self._make_request(self.state_url).json()
         regions_key = list(state["datastatic"])[0]
         regions = state["datastatic"][regions_key]
         self.service_areas_url = self.service_areas_url_template.format(regions=regions, regions_key=regions_key)
@@ -51,7 +54,7 @@ class KubraScraper(DeltaScraper):
 
     def _get_service_area_quadkeys(self):
         """Get the quadkeys for the entire service area"""
-        res = requests.get(self.service_areas_url).json()
+        res = self._make_request(self.service_areas_url).json()
         areas = res.get("file_data")[0].get("geom").get("a")
 
         points = []
@@ -69,26 +72,30 @@ class KubraScraper(DeltaScraper):
         return mercantile.quadkey(mercantile.tile(lng=ll[1], lat=ll[0], zoom=zoom))
 
     def fetch_data(self):
-        raise Exception("TESTING FAILURE. DOES GITHUB EMAIL ME?")
-        data = requests.get(self.data_url_template.format(data_path=self.data_path)).json()
+        data = self._make_request(self.data_url_template.format(data_path=self.data_path)).json()
         expected_outages = data["summaryFileData"]["totals"][0]["total_outages"]
 
         quadkeys = self._get_service_area_quadkeys()
 
-        outages = self._fetch_data(quadkeys).values()
+        outages = self._fetch_data(quadkeys, set()).values()
         number_out = sum([o["numberOut"] for o in outages])
+
+        print(f"Made {self.total_requests} requests, fetching {self.total_downloaded/1000} KB.")
 
         if number_out != expected_outages:
             raise Exception(f"Outages found ({number_out}) does not match expected outages ({expected_outages})")
 
         return list(outages)
 
-    def _fetch_data(self, quadkeys, zoom=MIN_ZOOM, cluster_search=False):
+    def _fetch_data(self, quadkeys, already_seen, zoom=MIN_ZOOM, cluster_search=False):
         outages = {}
 
         for q in quadkeys:
             url = self.quadkey_url_template.format(data_path=self.data_path, quadkey=q)
-            res = requests.get(url)
+            if url in already_seen:
+                continue
+            already_seen.add(url)
+            res = self._make_request(url)
 
             # If there are no outages in the area, there won't be a file.
             if not res.ok:
@@ -97,12 +104,12 @@ class KubraScraper(DeltaScraper):
             for o in res.json()["file_data"]:
                 if o["desc"]["cluster"]:
                     # If it's a cluster, we need to drill down (zoom in)
-                    outages.update(self._fetch_data([self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)], zoom + 1, True))
+                    outages.update(self._fetch_data([self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)], already_seen, zoom + 1, True))
                 else:
                     # If we were drilling down, once we get to the outage, we need to look at neighboring quadkeys in case
                     # any outages that were in the cluster spanned a quadkey boundary.
                     if cluster_search:
-                        outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), zoom))
+                        outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), already_seen, zoom))
 
                     outage_info = self._get_outage_info(o, url)
                     outages[outage_info["id"]] = outage_info
@@ -132,3 +139,9 @@ class KubraScraper(DeltaScraper):
             "longitude": loc[0][1],
             "source": url,
         }
+
+    def _make_request(self, url):
+        res = requests.get(url)
+        self.total_downloaded += len(res.content)
+        self.total_requests += 1
+        return res

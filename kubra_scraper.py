@@ -86,7 +86,8 @@ class KubraScraper(DeltaScraper):
         outages = {}
 
         for q in quadkeys:
-            res = requests.get(self.quadkey_url_template.format(data_path=self.data_path, quadkey=q))
+            url = self.quadkey_url_template.format(data_path=self.data_path, quadkey=q)
+            res = requests.get(url)
 
             # If there are no outages in the area, there won't be a file.
             if not res.ok:
@@ -102,7 +103,7 @@ class KubraScraper(DeltaScraper):
                     if cluster_search:
                         outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), zoom))
 
-                    outage_info = self._get_outage_info(o)
+                    outage_info = self._get_outage_info(o, url)
                     outages[outage_info["id"]] = outage_info
 
         return outages
@@ -112,7 +113,7 @@ class KubraScraper(DeltaScraper):
         return "\n".join(display)
 
     @staticmethod
-    def _get_outage_info(raw_outage):
+    def _get_outage_info(raw_outage, url):
         desc = raw_outage["desc"]
         loc = polyline.decode(raw_outage["geom"]["p"][0])
 
@@ -128,4 +129,5 @@ class KubraScraper(DeltaScraper):
             "startTime": desc["start_time"],
             "latitude": loc[0][0],
             "longitude": loc[0][1],
+            "source": url,
         }

@@ -69,6 +69,7 @@ class KubraScraper(DeltaScraper):
         return mercantile.quadkey(mercantile.tile(lng=ll[1], lat=ll[0], zoom=zoom))
 
     def fetch_data(self):
+        raise Exception("TESTING FAILURE. DOES GITHUB EMAIL ME?")
         data = requests.get(self.data_url_template.format(data_path=self.data_path)).json()
         expected_outages = data["summaryFileData"]["totals"][0]["total_outages"]
 

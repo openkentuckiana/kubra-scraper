@@ -37,9 +37,4 @@ if __name__ == "__main__":
     for scraper in discover_scrapers(github_token):
         if github_token is None:
             scraper.test_mode = True
-        try:
-            scraper.scrape_and_store()
-        except Exception as e:
-            print(scraper.filepath, file=sys.stderr)
-            print(e, file=sys.stderr)
-            print("\n", file=sys.stderr)
+        scraper.scrape_and_store()

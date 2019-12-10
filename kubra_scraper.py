@@ -8,6 +8,9 @@ from base_scraper import DeltaScraper
 load_dotenv()
 
 MIN_ZOOM = 6
+# They don't appear to let us zoom in beyond 15.
+# They just group incidents that arent't resolvable at zoom level 14, which isn't great.
+MAX_ZOOM = 14
 
 
 class KubraScraper(DeltaScraper):
@@ -87,12 +90,13 @@ class KubraScraper(DeltaScraper):
 
         return list(outages)
 
-    def _fetch_data(self, quadkeys, already_seen, zoom=MIN_ZOOM, cluster_search=False):
+    def _fetch_data(self, quadkeys, already_seen, zoom=MIN_ZOOM, cluster_search=False, print_prepend=''):
         outages = {}
 
         for q in quadkeys:
             url = self.quadkey_url_template.format(data_path=self.data_path, quadkey=q)
             if url in already_seen:
+                print(print_prepend, 'Skipping', url)
                 continue
             already_seen.add(url)
             res = self._make_request(url)
@@ -102,18 +106,30 @@ class KubraScraper(DeltaScraper):
                 continue
 
             for o in res.json()["file_data"]:
+                print(print_prepend, url, 'Is cluster search?:', cluster_search)
+                print(print_prepend, o)
                 if o["desc"]["cluster"]:
                     # If it's a cluster, we need to drill down (zoom in)
-                    outages.update(self._fetch_data([self._get_quadkey_for_point(o["geom"]["p"][0], zoom + 1)], already_seen, zoom + 1, True))
+                    next_zoom = zoom + 1
+                    if next_zoom > MAX_ZOOM:
+                        print("We are at max zoom, we can't resolve incidents grouped closer than zoom level 14.")
+                        outage_info = self._get_outage_info(o, url)
+                        outages[outage_info["id"]] = outage_info
+                    else:
+                        print(print_prepend, 'Zooming in. Going to:', next_zoom)
+                        outages.update(self._fetch_data([self._get_quadkey_for_point(o["geom"]["p"][0], next_zoom)], already_seen, next_zoom, True, print_prepend + '    '))
                 else:
                     # If we were drilling down, once we get to the outage, we need to look at neighboring quadkeys in case
                     # any outages that were in the cluster spanned a quadkey boundary.
                     if cluster_search:
-                        outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), already_seen, zoom))
+                        print(print_prepend, 'Looking for neighbors')
+                        outages.update(self._fetch_data(self._get_neighboring_quadkeys(q), already_seen, zoom, False, print_prepend + '    '))
+                    else:
+                        print(print_prepend, 'Not looking for neighbors.')
 
                     outage_info = self._get_outage_info(o, url)
                     outages[outage_info["id"]] = outage_info
-
+        print(print_prepend, 'Returning')
         return outages
 
     def display_record(self, outage):
@@ -125,10 +141,12 @@ class KubraScraper(DeltaScraper):
         desc = raw_outage["desc"]
         loc = polyline.decode(raw_outage["geom"]["p"][0])
 
+        # If it's a cluster we can't resolve, assign an ID that is <polyline point>-<start time>
         return {
-            "id": desc["inc_id"],
+            "id": f"{raw_outage['geom']['p'][0]}-{desc['start_time']}" if desc["cluster"] else desc["inc_id"],
             "etr": desc["etr"],
             "etrConfidence": desc["etr_confidence"],
+            "cluster": desc["cluster"],
             "comments": desc["comments"],
             "cause": desc["cause"]["EN-US"] if desc["cause"] else None,
             "numberOut": desc["n_out"],

@@ -17,7 +17,7 @@ class KubraScraper(DeltaScraper):
     base_url = "https://kubra.io/"
     data_url_template = base_url + "{data_path}/public/summary-1/data.json"
     service_areas_url_template = base_url + "{regions}/{regions_key}/serviceareas.json"
-    quadkey_url_template = base_url + "{data_path}/public/cluster-3/{quadkey}.json"
+    quadkey_url_template = base_url + "{data_path}/public/{layer_name}/{quadkey}.json"
 
     record_key = "id"
     noun = "outage"
@@ -32,6 +32,13 @@ class KubraScraper(DeltaScraper):
             + f"stormcenter/api/v1/stormcenters/{self.instance_id}/views/{self.view_id}/currentState?preview=false"
         )
 
+    @property
+    def config_url(self):
+        return (
+                self.base_url
+                + f"stormcenter/api/v1/stormcenters/{self.instance_id}/views/{self.view_id}/configuration/{self.deploymentId}?preview=false"
+        )
+
     def __init__(self, github_token):
         super().__init__(github_token)
         state = self._make_request(self.state_url).json()
@@ -39,6 +46,11 @@ class KubraScraper(DeltaScraper):
         regions = state["datastatic"][regions_key]
         self.service_areas_url = self.service_areas_url_template.format(regions=regions, regions_key=regions_key)
         self.data_path = state["data"]["interval_generation_data"]
+
+        self.deploymentId = state["stormcenterDeploymentId"]
+        config = self._make_request(self.config_url).json()
+        interval_data = config["config"]["layers"]["data"]["interval_generation_data"]
+        self.layer_name = [l for l in interval_data if l["type"].startswith("CLUSTER_LAYER")][0]["layerName"]
 
     @staticmethod
     def _get_bounding_box(points):
@@ -94,7 +106,7 @@ class KubraScraper(DeltaScraper):
         outages = {}
 
         for q in quadkeys:
-            url = self.quadkey_url_template.format(data_path=self.data_path, quadkey=q)
+            url = self.quadkey_url_template.format(data_path=self.data_path, layer_name=self.layer_name, quadkey=q)
             if url in already_seen:
                 print(print_prepend, 'Skipping', url)
                 continue
@@ -143,7 +155,7 @@ class KubraScraper(DeltaScraper):
 
         # If it's a cluster we can't resolve, assign an ID that is <polyline point>-<start time>
         return {
-            "id": f"{raw_outage['geom']['p'][0]}-{desc['start_time']}" if desc["cluster"] else desc["inc_id"],
+            "id": f"{raw_outage['geom']['p'][0]}-{desc['start_time']}" if not desc["inc_id"] else desc["inc_id"],
             "etr": desc["etr"],
             "etrConfidence": desc["etr_confidence"],
             "cluster": desc["cluster"],

@@ -64,8 +64,8 @@ class KubraScraper(DeltaScraper):
 
         print(f"Made {self.total_requests} requests, fetching {self.total_downloaded/1000} KB.")
 
-        # if number_out != expected_outages:
-        #     raise Exception(f"Outages found ({number_out}) does not match expected outages ({expected_outages})")
+        if number_out != expected_outages:
+            raise Exception(f"Outages found ({number_out}) does not match expected outages ({expected_outages})")
 
         return list(outages)
 
@@ -112,17 +112,12 @@ class KubraScraper(DeltaScraper):
                             )
                         )
                 else:
-                    # If we were drilling down, once we get to the outage, we need to look at neighboring quadkeys in case
-                    # any outages that were in the cluster spanned a quadkey boundary.
-                    if cluster_search:
-                        print(print_prepend, "Looking for neighbors")
-                        outages.update(
-                            self._fetch_data(
-                                self._get_neighboring_quadkeys(q), already_seen, zoom, False, print_prepend + "    "
-                            )
+                    print(print_prepend, "Looking for neighbors")
+                    outages.update(
+                        self._fetch_data(
+                            self._get_neighboring_quadkeys(q), already_seen, zoom, False, print_prepend + "    "
                         )
-                    else:
-                        print(print_prepend, "Not looking for neighbors.")
+                    )
 
                     outage_info = self._get_outage_info(o, url)
                     outages[outage_info["id"]] = outage_info

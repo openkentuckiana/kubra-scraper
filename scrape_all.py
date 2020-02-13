@@ -25,6 +25,7 @@ def discover_scrapers(token):
                         issubclass(klass, DeltaScraper)
                         and klass.__module__ != "kubra_scraper"
                         and klass.__module__ != "base_scraper"
+                        and klass.__module__ != "lgeku_scraper"
                     ):
                         scrapers.append(klass(token))
                 except TypeError:

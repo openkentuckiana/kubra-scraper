@@ -7,7 +7,7 @@ from base_scraper import DeltaScraper
 
 load_dotenv()
 
-MIN_ZOOM = 6
+MIN_ZOOM = 7
 # They don't appear to let us zoom in beyond 15.
 # They just group incidents that aren't resolvable at zoom level 14, which isn't great.
 MAX_ZOOM = 14
@@ -58,6 +58,8 @@ class KubraScraper(DeltaScraper):
         expected_outages = data["summaryFileData"]["totals"][0]["total_outages"]
 
         quadkeys = self._get_service_area_quadkeys()
+
+        breakpoint()
 
         outages = self._fetch_data(quadkeys, set()).values()
         number_out = sum([o["numberOut"] for o in outages])

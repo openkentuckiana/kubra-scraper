@@ -59,8 +59,6 @@ class KubraScraper(DeltaScraper):
 
         quadkeys = self._get_service_area_quadkeys()
 
-        breakpoint()
-
         outages = self._fetch_data(quadkeys, set()).values()
         number_out = sum([o["numberOut"] for o in outages])
 

@@ -184,3 +184,4 @@ class DeltaScraper(Scraper):
         else:
             summary_text = "{} {}".format(verb, self.display_name)
         return "{}\n\n{}".format(summary_text, body)
+

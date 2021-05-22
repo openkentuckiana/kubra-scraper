@@ -1,0 +1,36 @@
+name: Deploy Datasette
+
+#on:
+#  schedule:
+#    # * is a special character in YAML so you have to quote this string
+#    - cron:  '10 */6 * * *'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Log in to Heroku
+      uses: actions/heroku@master
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      with:
+        args: container:login
+    - name: Deploy to Heroku
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      # Add command for each DB to publish
+      run: |
+        python build_database.py lgeku/outages.db
+        heroku plugins:install heroku-builds
+        datasette publish heroku --name=lgeku-outages --install=datasette-cluster-map --install=datasette-vega lgeku/outages.db

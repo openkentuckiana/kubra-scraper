@@ -13,7 +13,6 @@ MIN_ZOOM = 7
 MAX_ZOOM = 14
 
 
-
 class KubraScraper(DeltaScraper):
     base_url = "https://kubra.io/"
 
@@ -47,6 +46,7 @@ class KubraScraper(DeltaScraper):
         self.regions_key = list(state["datastatic"])[0]
         self.regions = state["datastatic"][self.regions_key]
         self.data_path = state["data"]["interval_generation_data"]
+        self.cluster_data_path = state["data"]["cluster_interval_generation_data"]
 
         self.deploymentId = state["stormcenterDeploymentId"]
         config = self._make_request(self.config_url).json()
@@ -125,7 +125,8 @@ class KubraScraper(DeltaScraper):
         return outages
 
     def _get_quadkey_url(self, quadkey):
-        return f"{self.base_url}{self.data_path}/public/{self.layer_name}/{quadkey}.json"
+        data_path = self.cluster_data_path.format(qkh=quadkey[-3:][::-1])
+        return f"{self.base_url}{data_path}/public/{self.layer_name}/{quadkey}.json"
 
     def _get_service_area_quadkeys(self):
         """Get the quadkeys for the entire service area"""
